@@ -4,7 +4,13 @@
 
 ## 🌐 在线访问
 
-> Gitee Pages 部署后在此填写网址，格式：`https://<用户名>.gitee.io/<仓库名>/`
+线上网址（Gitee Pages，部署目录 `frontend`）：
+
+**https://liu---zishan.gitee.io/astra-max-cn/**
+
+> 访客打开即为本地演示模式，留言数据保存在各自浏览器中；本机启动 Hardhat 节点后访问则自动进入链上模式。
+
+- Gitee 源码仓库：https://gitee.com/liu---zishan/astra-max-cn
 
 ## ✨ 功能特性
 
