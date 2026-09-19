@@ -4,13 +4,18 @@
 
 ## 🌐 在线访问
 
-线上网址（Gitee Pages，部署目录 `frontend`）：
+线上网址（GitHub Pages 自动部署，`frontend` 为站点目录）：
 
-**https://liu---zishan.gitee.io/astra-max-cn/**
+**https://makildavid4-crypto.github.io/astra-max-cn/**
 
 > 访客打开即为本地演示模式，留言数据保存在各自浏览器中；本机启动 Hardhat 节点后访问则自动进入链上模式。
 
-- Gitee 源码仓库：https://gitee.com/liu---zishan/astra-max-cn
+代码仓库（Git 版本控制）：
+
+- Gitee（国内）：https://gitee.com/liu---zishan/astra-max-cn
+- GitHub：https://github.com/makildavid4-crypto/astra-max-cn
+
+> 说明：Gitee Pages 服务已官方下线（帮助文档标注"功能已下线"），故静态网站改由 GitHub Pages 托管；源码仍以 Gitee 仓库为主。
 
 ## ✨ 功能特性
 
@@ -75,9 +80,10 @@ node scripts/serve.js
 
 ## ☁️ 静态部署（演示模式）
 
-将仓库推送到 Gitee 后，在仓库页「服务 → Gitee Pages」中：
+通过仓库内的 GitHub Actions 工作流（`.github/workflows/deploy-pages.yml`）自动部署：
 
-- 部署分支：`master`
-- 部署目录：`frontend`
+1. 推送代码到 GitHub 仓库的 `master` 分支即自动触发构建；
+2. 工作流把 `frontend` 目录发布到 GitHub Pages（仓库 Settings → Pages → Source 需设为 "GitHub Actions"）；
+3. 部署成功后通过 `https://<用户名>.github.io/<仓库名>/` 访问，访客无需任何插件即可使用留言功能（数据保存在各自浏览器 localStorage 中）。
 
-启动后即可通过 Gitee Pages 网址访问，访客无需安装任何插件即可使用留言功能（数据保存在各自浏览器中）。
+> ethers.js 已本地化存放于 `frontend/js/vendor/`，网站不依赖任何外部 CDN，离线/国内网络均可完整打开。
