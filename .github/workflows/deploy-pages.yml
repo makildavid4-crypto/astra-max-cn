@@ -1,0 +1,40 @@
+# GitHub Pages 自动部署工作流
+# 每当 master 分支有更新时，自动把 frontend 目录发布到 GitHub Pages
+name: Deploy frontend to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch: # 允许在 Actions 页面手动触发
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只保留一次部署，新的推送会取消旧的
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 配置 Pages
+        uses: actions/configure-pages@v5
+
+      - name: 上传 frontend 目录作为站点内容
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./frontend
+
+      - name: 部署到 GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
