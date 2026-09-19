@@ -8,7 +8,7 @@
         无需后端、无需插件，完整模拟留言板交互。
    ============================================================ */
 
-const { ethers } = window; // ethers.js v6（CDN 引入）
+const ethers = window.ethers || null; // ethers.js v6（本地引入）；加载失败时为 null，网站自动降级为纯演示模式
 const CHAIN_ID = 31337n;   // Hardhat 本地网络
 const RPC_URL = "http://127.0.0.1:8545";
 
@@ -25,7 +25,8 @@ const HARDHAT_KEYS = [
   "0xdbda1821b80551c9d65939329250298aa3472ba22feea921c0cf5d620ea67b97",
   "0x2a871d0798f97d79848a013d4936a73bf4cc922c825d33c1cf7073dff6d409c6",
 ];
-const HARDHAT_ADDRS = HARDHAT_KEYS.map(k => new ethers.Wallet(k).address);
+// ethers 未加载时留空，链上功能整体禁用，不影响演示模式
+const HARDHAT_ADDRS = ethers ? HARDHAT_KEYS.map(k => new ethers.Wallet(k).address) : [];
 
 let provider, signer, contract, currentAccount, eip6963Provider;
 let mode = null;       // "chain" 或 "demo"
@@ -495,6 +496,11 @@ async function detectLocalChain(timeoutMs = 2500) {
 }
 
 (async function boot() {
+  // ethers 库未加载（如离线/资源被拦截）：直接进入演示模式，保证网站基本可用
+  if (!ethers) {
+    enterDemoMode();
+    return;
+  }
   const chainOnline = await detectLocalChain();
   if (!chainOnline) {
     enterDemoMode();

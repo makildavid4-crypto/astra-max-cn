@@ -4,7 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>🔍 简易区块浏览器 · 交易证明工具</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.2.3/ethers.umd.min.js"></script>
+  <!-- ethers.js v6 本地引用（避免国外 CDN 在国内加载失败） -->
+  <script src="./js/vendor/ethers.umd.min.js"></script>
   <style>
     * { box-sizing: border-box; }
     body {
