@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>去中心化留言板 DApp</title>
+  <!-- ethers.js v6 via CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.2.3/ethers.umd.min.js"></script>
+  <!-- 由部署脚本自动生成的合约地址与 ABI 配置 -->
+  <script src="./contractConfig.js"></script>
+  <!-- 独立样式表 -->
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>📝 去中心化留言板</h1>
+      <p>链上留言 · 永久保存 · 不可篡改（无节点时自动切换本地演示模式）</p>
+    </header>
+
+    <!-- 运行模式横幅（由 app.js 自动填充） -->
+    <div id="modeBanner" class="mode-banner" style="display:none;"></div>
+
+    <!-- 连接钱包 / 演示模式身份 -->
+    <div class="card">
+      <h2>身份与网络</h2>
+      <div class="row">
+        <span class="status-dot dot-off" id="netDot"></span>
+        <span class="info" id="netInfo">检测中…</span>
+      </div>
+
+      <!-- 链上模式：钱包连接区 -->
+      <div id="walletBox" class="row" style="margin-top:12px;">
+        <button id="connectBtn">连接 MetaMask</button>
+        <button class="secondary" id="quickBtn" title="无需 MetaMask，直接连本地 Hardhat 节点（本地开发用）">⚡ 快速模式（无需 MetaMask）</button>
+      </div>
+
+      <!-- 演示模式：昵称设置区（由 app.js 显示） -->
+      <div id="demoBox" class="row" style="margin-top:12px; display:none;">
+        <span class="info">当前昵称：</span>
+        <input type="text" id="demoNick" placeholder="输入你的昵称" maxlength="20" style="max-width:240px;" />
+        <button class="secondary" id="saveNickBtn" style="padding:9px 14px;">保存昵称</button>
+      </div>
+
+      <div class="info" style="margin-top:10px;">
+        当前身份：<b id="accountText" class="muted">检测中…</b>
+      </div>
+      <div class="info row" id="balanceRow" style="margin-top:6px;">
+        <span>账户 ETH：<b id="balanceText" class="muted">—</b>
+        <span id="balanceDelta" class="muted" style="margin-left:8px;"></span></span>
+        <button class="secondary" id="refreshBalanceBtn" style="margin-left:12px; padding:4px 10px; font-size:12px;">刷新余额</button>
+      </div>
+      <div id="quickSwitcher" class="row" style="margin-top:8px; display:none;">
+        <span class="info">模拟用户：</span>
+        <select id="userSelect" style="padding:8px 10px; border-radius:8px; border:1px solid #d0d0e0;">
+          <option value="0">账户 #0 · 0xf39F...2266</option>
+          <option value="1">账户 #1 · 0x7099...79C8</option>
+          <option value="2">账户 #2 · 0x3C44...93BC</option>
+          <option value="3">账户 #3 · 0x90F7...906</option>
+          <option value="4">账户 #4 · 0x15d3...6A65</option>
+          <option value="5">账户 #5 · 0x9965...A4dc</option>
+          <option value="6">账户 #6 · 0x976E...0aa9</option>
+          <option value="7">账户 #7 · 0x14dC...9955</option>
+          <option value="8">账户 #8 · 0x2361...1E8f</option>
+          <option value="9">账户 #9 · 0xa0Ee...9720</option>
+        </select>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <!-- 发布留言 -->
+    <div class="card">
+      <h2>发布留言</h2>
+      <div class="row">
+        <input type="text" id="messageInput" placeholder="说点什么吧（最多 280 字符）" maxlength="280" />
+        <button id="postBtn" disabled>发布留言</button>
+      </div>
+      <div id="txInfo" style="margin-top:10px; font-size:13px; display:none; background:#f7f8ff; border:1px dashed #b8bef0; padding:8px 10px; border-radius:8px;">
+        <div>✅ 交易信息 &nbsp;|&nbsp; <a id="txHashLink" target="_blank" rel="noopener" style="color:#5b6ae8; text-decoration:underline; font-family:monospace; word-break:break-all;"></a></div>
+        <div id="txReceipt" class="muted" style="margin-top:4px;"></div>
+      </div>
+      <div class="muted" style="margin-top:8px;">链上模式：连接 MetaMask 或用快速模式发布留言，可观察 Gas 扣费并点击交易哈希跳转区块浏览器；演示模式：留言保存在本浏览器，换设备不可见。</div>
+    </div>
+
+    <!-- 留言列表 -->
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <h2 style="margin:0;">全部留言 <span class="muted" id="countText"></span></h2>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="secondary" id="refreshBtn">刷新留言</button>
+          <a id="explorerLink" href="./explorer.html" target="_blank" style="text-decoration:none; color:#555; border:1px solid #ddd; padding:8px 14px; border-radius:8px; background:#f5f5fa; font-size:13px; font-weight:600;">🔍 区块浏览器</a>
+        </div>
+      </div>
+      <ul id="messages">
+        <li class="empty">正在加载…</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- 独立 JavaScript 文件 -->
+  <script src="./js/app.js"></script>
+</body>
+</html>

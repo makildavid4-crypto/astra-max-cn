@@ -1,0 +1,16 @@
+# 依赖目录（npm install 后重新生成）
+node_modules/
+
+# Hardhat 编译缓存与构建产物（npx hardhat compile 重新生成）
+cache/
+artifacts/
+
+# 系统与编辑器文件
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# 日志
+*.log
+npm-debug.log*

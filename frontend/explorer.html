@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>🔍 简易区块浏览器 · 交易证明工具</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.2.3/ethers.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      margin: 0; background: #f5f6fb; color: #1a1a2e; min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff; padding: 22px 20px; text-align: center;
+    }
+    header h1 { margin: 0 0 4px; font-size: 22px; }
+    header p { margin: 0; opacity: .9; font-size: 13px; }
+    header a { color: #fff; text-decoration: underline; margin-left: 8px; font-size: 13px; }
+    .container { max-width: 960px; margin: 0 auto; padding: 24px 16px 60px; }
+
+    .card {
+      background: #fff; border-radius: 14px; padding: 18px 20px; margin-bottom: 18px;
+      box-shadow: 0 6px 20px rgba(0,0,0,.06);
+    }
+    .card h2 { margin: 0 0 14px; font-size: 18px; }
+    .card h3 { margin: 22px 0 8px; font-size: 15px; color: #444; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; }
+    input[type=text] {
+      flex: 1; min-width: 280px; padding: 10px 13px; font-size: 14px;
+      border: 1px solid #d0d0e0; border-radius: 8px; outline: none; font-family: monospace;
+    }
+    input[type=text]:focus { border-color: #5b6ae8; }
+    button {
+      cursor: pointer; border: none; border-radius: 8px; padding: 10px 18px;
+      font-size: 14px; font-weight: 600; background: #5b6ae8; color: #fff;
+    }
+    button.secondary { background: #f0f0f5; color: #333; }
+    button:active { transform: translateY(1px); }
+
+    .kv { border-top: 1px dashed #e7e7f0; padding: 8px 0; font-size: 13.5px; }
+    .kv:first-child { border-top: none; }
+    .kv .k { display: inline-block; width: 150px; color: #777; }
+    .kv .v { color: #111; word-break: break-all; font-family: monospace; }
+
+    .mono { font-family: monospace; word-break: break-all; }
+    .muted { color: #777; font-size: 13px; }
+    .ok { color: #2ecc71; }
+    .err { color: #e25555; }
+
+    .log-box {
+      background: #f8f8fd; border: 1px solid #e6e6f2; border-radius: 8px;
+      padding: 10px 12px; font-family: monospace; font-size: 12.5px;
+      max-height: 300px; overflow: auto; white-space: pre-wrap;
+    }
+
+    .verified-yes {
+      background: #e8f9ef; border: 1px solid #9ddab3; color: #1b7a41;
+      border-radius: 10px; padding: 10px 14px; font-size: 14px; margin: 6px 0;
+    }
+    .verified-no {
+      background: #fde8e8; border: 1px solid #f3b0b0; color: #a32525;
+      border-radius: 10px; padding: 10px 14px; font-size: 14px; margin: 6px 0;
+    }
+
+    .tips {
+      background: #fff7e6; border-left: 4px solid #ffc65d; padding: 10px 14px;
+      border-radius: 6px; font-size: 13px; color: #6b5210;
+    }
+
+    #status { font-size: 13px; min-height: 18px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🔍 简易区块浏览器 · 交易真实性证明工具</h1>
+    <p>连接本地 Hardhat 节点，查询交易详情并做「签名者地址恢复」（密码学铁证）
+      <a href="./index.html">← 返回留言板</a>
+    </p>
+  </header>
+  <div class="container">
+
+    <div class="card">
+      <h2>① 查询交易（按 Hash / 区块号 / 地址）</h2>
+      <div class="row">
+        <input type="text" id="txHash" placeholder="输入交易哈希 tx hash（0x 开头）" />
+        <button id="btnLookupTx">🔎 查交易</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <input type="text" id="blockNum" placeholder="或输入区块号（如 5）查看整个区块内容" />
+        <button id="btnLookupBlock" class="secondary">📦 查区块</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <input type="text" id="addr" placeholder="或输入地址（0x...）查看 ETH 余额 / nonce" />
+        <button id="btnLookupAddr" class="secondary">👛 查地址</button>
+      </div>
+      <div id="status"></div>
+    </div>
+
+    <div id="resultBox" class="card" style="display:none;">
+      <h2 id="resultTitle">交易详情</h2>
+      <div id="resultBody"></div>
+    </div>
+
+    <div class="card">
+      <h2>② 交易签名验证（证明这笔交易真的是「该地址」发的）</h2>
+      <div class="tips">
+        原理：节点收到交易后，会用 <b>ecrecover(交易哈希, v,r,s)</b> 从签名还原出签名者公钥→地址；如果还原出的地址 == 交易 from 地址 == 扣 gas 的地址，就证明交易是该账户私钥签名发出的。
+        下面我们在前端复现这个过程——这就是「节点才会认这笔交易是该地址发的，才会扣它的 ETH」的数学依据。
+      </div>
+      <div id="verifyPanel" style="margin-top:14px;">
+        <p class="muted">先在上方查一笔交易，验证结果会自动显示在这里。</p>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    const { ethers } = window;
+    const RPC_URL = "http://127.0.0.1:8545";
+    const CHAIN_ID = 31337n;
+    let provider;
+
+    const $ = id => document.getElementById(id);
+    const els = {
+      txHash: $("txHash"), blockNum: $("blockNum"), addr: $("addr"),
+      btnTx: $("btnLookupTx"), btnBlock: $("btnLookupBlock"), btnAddr: $("btnLookupAddr"),
+      status: $("status"), resultBox: $("resultBox"), resultTitle: $("resultTitle"),
+      resultBody: $("resultBody"), verifyPanel: $("verifyPanel"),
+    };
+
+    function setStatus(msg, cls = "") {
+      els.status.textContent = msg || "";
+      els.status.className = cls ? (cls === "ok" ? "ok" : "err") : "";
+    }
+
+    async function ensureProvider() {
+      if (!provider) provider = new ethers.JsonRpcProvider(RPC_URL);
+      try {
+        const n = await provider.getNetwork();
+        if (n.chainId !== CHAIN_ID) {
+          setStatus(`⚠️ 连接到的链不是本地 Hardhat（chainId=${n.chainId}），请确认 npx hardhat node 运行中`, "err");
+        } else {
+          setStatus(`✓ 已连接本地节点（chainId=${n.chainId}）`, "ok");
+        }
+      } catch (e) {
+        setStatus("❌ 无法连接到本地节点，请确认 npx hardhat node 正在运行，端口 8545", "err");
+        throw e;
+      }
+    }
+
+    function kv(k, v, extraMonospace = true) {
+      const vv = v === null || v === undefined ? "—" : String(v);
+      return `<div class="kv"><span class="k">${k}</span><span class="v">${vv}</span></div>`;
+    }
+
+    // 把一条交易展示 + 返回签名验证所需字段
+    async function renderTx(tx, receipt, block) {
+      const body = [];
+      body.push("<h3>📋 交易内容（Transaction）</h3>");
+      body.push(kv("哈希 hash", tx.hash));
+      body.push(kv("所在区块 blockNumber", tx.blockNumber + (block ? ` · 哈希 ${block.hash}` : "")));
+      body.push(kv("from 发送者", tx.from));
+      body.push(kv("to 接收者（合约地址）", tx.to));
+      body.push(kv("value 转账金额", ethers.formatEther(tx.value || 0) + " ETH"));
+      body.push(kv("gas limit", tx.gasLimit.toString()));
+      body.push(kv("gas price", ethers.formatGwei(tx.gasPrice) + " Gwei = " + (Number(tx.gasPrice) / 1e18).toFixed(10) + " ETH"));
+      body.push(kv("nonce（该账户第几条交易）", tx.nonce.toString()));
+      body.push(kv("链 ID chainId", tx.chainId.toString()));
+      body.push(kv("type 类型 (0=Legacy, 2=EIP1559)", tx.type));
+      body.push(kv("data / input（调用 postMessage 的编码参数）", tx.data));
+
+      if (receipt) {
+        body.push("<h3>🧾 交易收据 Receipt（上链成功后由节点产生）</h3>");
+        body.push(kv("交易 status", receipt.status === 1
+          ? '<span class="ok">1 = 成功 ✓（合约正常执行，留言写入链状态）</span>'
+          : '<span class="err">0 = 失败 ✗（执行被回滚）</span>'));
+        body.push(kv("cumulativeGasUsed", receipt.cumulativeGasUsed.toString()));
+        body.push(kv("本次 gasUsed（≈手续费）", receipt.gasUsed.toString()));
+        const gasFeeWei = (tx.gasPrice ? receipt.gasUsed * tx.gasPrice : 0n);
+        body.push(kv("实际 gas 费扣除（gasUsed × gasPrice）",
+          gasFeeWei ? (ethers.formatEther(gasFeeWei) + ` ETH = ${gasFeeWei.toString()} wei` ) : "—"));
+        body.push(kv("合约创建/调用地址 contractAddress", receipt.contractAddress || "—（已有合约调用，无新合约创建）"));
+        body.push(kv("logs（事件日志）数量", receipt.logs?.length || 0));
+
+        if (receipt.logs?.length) {
+          body.push("<h3>📜 日志（合约事件）——证明 postMessage 函数真的执行了</h3>");
+          // 尝试解析 MessageBoard 的 MessagePosted 事件
+          const abi = ["event MessagePosted(address indexed author, string content, uint256 timestamp, uint256 index)"];
+          const iface = new ethers.Interface(abi);
+          receipt.logs.forEach((log, i) => {
+            try {
+              const parsed = iface.parseLog({ topics: [...log.topics], data: log.data });
+              body.push(`<div class="log-box">📄 log[${i}] 事件: <b>${parsed.name}</b>
+  author    = ${parsed.args.author}
+  content   = ${parsed.args.content}
+  timestamp = ${parsed.args.timestamp.toString()} (${new Date(Number(parsed.args.timestamp)*1000).toLocaleString("zh-CN", {hour12:false})})
+  index     = ${parsed.args.index.toString()}
+  contract  = ${log.address}</div>`);
+            } catch (e) {
+              body.push(`<div class="log-box">📄 log[${i}] 未解析（非 MessagePosted）: ${JSON.stringify(log, null, 2)}</div>`);
+            }
+          });
+        }
+      }
+
+      if (block) {
+        body.push("<h3>🧱 所在区块信息</h3>");
+        body.push(kv("区块号 number", block.number.toString()));
+        body.push(kv("区块 hash", block.hash));
+        body.push(kv("父哈希 parentHash", block.parentHash));
+        body.push(kv("时间戳 timestamp", block.timestamp.toString() + "（" + new Date(Number(block.timestamp)*1000).toLocaleString("zh-CN",{hour12:false}) + "）"));
+        body.push(kv("出块者 miner / 难度 difficulty", block.miner + " / " + block.difficulty.toString()));
+        body.push(kv("区块内交易数 transactions", block.transactions.length));
+      }
+
+      els.resultTitle.textContent = `交易详情 #${tx.hash.slice(0,10)}...`;
+      els.resultBody.innerHTML = body.join("");
+      els.resultBox.style.display = "block";
+
+      // 签名者恢复验证
+      await renderVerify(tx, receipt);
+    }
+
+    async function renderVerify(tx, receipt) {
+      const panel = [];
+      panel.push("<h3>🔑 签名者地址恢复（ecrecover）验证</h3>");
+      try {
+        // ethers v6 提供 Transaction 类可以从原始字段还原签名并 recoverAddress
+        // 我们需要 v,r,s 以及原始的未签名交易 hash
+        const txObj = {
+          type: tx.type,
+          to: tx.to,
+          nonce: tx.nonce,
+          gasLimit: tx.gasLimit,
+          gasPrice: tx.gasPrice ?? undefined,
+          maxPriorityFeePerGas: tx.maxPriorityFeePerGas ?? undefined,
+          maxFeePerGas: tx.maxFeePerGas ?? undefined,
+          value: tx.value,
+          data: tx.data,
+          chainId: tx.chainId,
+          signature: { v: tx.signature.v, r: tx.signature.r, s: tx.signature.s },
+        };
+        const txParsed = ethers.Transaction.from(txObj);
+        const recovered = txParsed.recoverAddress();
+
+        const txHashRebuilt = txParsed.hash; // 验证 hash 一致性
+        const hashMatch = txHashRebuilt.toLowerCase() === tx.hash.toLowerCase();
+
+        const match = recovered.toLowerCase() === (tx.from || receipt?.from).toLowerCase();
+
+        panel.push(kv("1. 交易中声明的 from 地址", tx.from));
+        panel.push(kv("2. 从签名 (v,r,s) 用 ecrecover 还原出的签名者地址", recovered));
+        panel.push(kv("3. 两者是否一致？", match
+          ? '<div class="verified-yes">✅ 完全一致！证明这笔交易确实是「' + tx.from.slice(0,10) + '...」这个账户持有的私钥签名发出的。节点就是通过这一步验证身份后，才从该地址扣除 gas 费并执行合约 postMessage。</div>'
+          : '<div class="verified-no">❌ 不一致（这说明交易是伪造/非法的，节点会直接拒绝）</div>'));
+        panel.push(kv("4. 还原出的交易 hash 与链上记录的 hash 一致？", hashMatch
+          ? '<span class="ok">✓ 一致（证明交易内容没有被篡改）</span>'
+          : '<span class="err">✗ 不一致（数据可能被篡改）</span>'));
+        panel.push(kv("签名 v / r / s",
+          `v=${tx.signature.v} r=${tx.signature.r} s=${tx.signature.s}`));
+
+        if (receipt && tx.gasPrice) {
+          const fee = receipt.gasUsed * tx.gasPrice;
+          panel.push(`<div class="verified-yes" style="margin-top:12px;">
+              💰 因为身份验证通过，节点从地址 <b>${tx.from}</b> 实际扣除了 Gas 费：
+              <b>${ethers.formatEther(fee)} ETH</b>（${fee.toString()} wei）
+              = gasUsed(${receipt.gasUsed.toString()}) × gasPrice(${tx.gasPrice.toString()} wei)。
+              这就是「节点认这笔交易是该地址发的、扣它的 ETH 当 gas、执行合约」的完整流程。
+          </div>`);
+        }
+      } catch (e) {
+        console.error(e);
+        panel.push(`<div class="verified-no">验证出错：${e.message || e}</div>`);
+      }
+      els.verifyPanel.innerHTML = panel.join("");
+    }
+
+    async function lookupTx() {
+      try { await ensureProvider(); } catch (e) { return; }
+      const hash = els.txHash.value.trim();
+      if (!/^0x[a-fA-F0-9]{64}$/.test(hash)) {
+        setStatus("请输入有效的 66 位交易哈希（0x 开头）", "err"); return;
+      }
+      setStatus("查询中...");
+      try {
+        const tx = await provider.getTransaction(hash);
+        if (!tx) { setStatus("未找到该交易（可能还没上链，或 hash 错误）", "err"); return; }
+        const receipt = await provider.getTransactionReceipt(hash);
+        const block = tx.blockNumber ? await provider.getBlock(tx.blockNumber) : null;
+        await renderTx(tx, receipt, block);
+        setStatus("查询完成 ✓", "ok");
+      } catch (e) {
+        console.error(e);
+        setStatus("查询失败: " + (e.message || e), "err");
+      }
+    }
+
+    async function lookupBlock() {
+      try { await ensureProvider(); } catch (e) { return; }
+      const nStr = els.blockNum.value.trim();
+      if (!/^\d+$/.test(nStr)) { setStatus("请输入数字区块号", "err"); return; }
+      setStatus("查询中...");
+      try {
+        const block = await provider.getBlock(Number(nStr));
+        if (!block) { setStatus("该区块还不存在", "err"); return; }
+        const body = [];
+        body.push(kv("区块号", block.number.toString()));
+        body.push(kv("hash", block.hash));
+        body.push(kv("时间戳", block.timestamp.toString() + " · " + new Date(Number(block.timestamp)*1000).toLocaleString("zh-CN",{hour12:false})));
+        body.push(kv("交易数", block.transactions.length));
+        body.push(kv("父哈希", block.parentHash));
+        body.push(kv("miner", block.miner));
+        body.push("<h3>📦 区块中的交易</h3>");
+        if (block.transactions.length === 0) {
+          body.push('<div class="muted">空区块（可能是刚启动的节点还没发交易）</div>');
+        } else {
+          for (const h of block.transactions) {
+            const tx = await provider.getTransaction(h);
+            const to = tx.to ? tx.to : "（合约创建）";
+            body.push(`<div class="log-box" style="margin-bottom:6px;">tx: <a href="?tx=${h}" style="color:#5b6ae8;">${h}</a>
+  from : ${tx.from}
+  to   : ${to}
+  value: ${ethers.formatEther(tx.value)} ETH · gasUsed(if known): see receipt</div>`);
+          }
+        }
+        els.resultTitle.textContent = `区块 #${block.number}`;
+        els.resultBody.innerHTML = body.join("");
+        els.resultBox.style.display = "block";
+        setStatus("查询完成 ✓", "ok");
+      } catch (e) {
+        console.error(e);
+        setStatus("查询失败: " + (e.message || e), "err");
+      }
+    }
+
+    async function lookupAddr() {
+      try { await ensureProvider(); } catch (e) { return; }
+      const a = els.addr.value.trim();
+      if (!/^0x[a-fA-F0-9]{40}$/.test(a)) { setStatus("请输入 42 位 0x 开头地址", "err"); return; }
+      setStatus("查询中...");
+      try {
+        const bal = await provider.getBalance(a);
+        const nonce = await provider.getTransactionCount(a);
+        const code = await provider.getCode(a);
+        const isContract = code !== "0x";
+        const body = [];
+        body.push(kv("地址", a));
+        body.push(kv("ETH 余额", `${ethers.formatEther(bal)} ETH  （${bal.toString()} wei）`));
+        body.push(kv("交易计数 nonce", nonce.toString() + "（该地址已成功发送的交易数量）"));
+        body.push(kv("类型", isContract
+          ? '<span class="ok">✅ 这是一个智能合约地址（有 code）</span>'
+          : '<span class="muted">普通外部账户 EOA（无 code，只有私钥持有者能签名发交易）</span>'));
+        if (isContract) body.push(kv("合约 code (开头)", code.slice(0, 200) + "..."));
+
+        // 演示：余额前后变化就是证明
+        body.push(`<div class="tips" style="margin-top:10px;">
+          💡 <b>回答你的问题：「看剩余 ETH 判断交易是否真实发生」可行吗？</b><br>
+          完全可行，而且是最直观的证明。每一笔成功上链的交易都会从发送者地址扣 gas 费（即使转账 value=0 的合约调用也会扣 gas）。
+          因此只要你看到：发交易前余额 X，发完后余额 X' < X（差值正好是 gasUsed × gasPrice），
+          并且对应时间戳上存在一笔 from 等于该地址、hash 匹配的交易，就证明这笔交易真的经过了节点验证、真的扣了 gas、真的执行了合约。
+        </div>`);
+
+        els.resultTitle.textContent = `地址详情 ${a.slice(0,8)}...`;
+        els.resultBody.innerHTML = body.join("");
+        els.resultBox.style.display = "block";
+        setStatus("查询完成 ✓", "ok");
+      } catch (e) {
+        console.error(e);
+        setStatus("查询失败: " + (e.message || e), "err");
+      }
+    }
+
+    els.btnTx.addEventListener("click", lookupTx);
+    els.btnBlock.addEventListener("click", lookupBlock);
+    els.btnAddr.addEventListener("click", lookupAddr);
+    els.txHash.addEventListener("keypress", e => e.key === "Enter" && lookupTx());
+    els.blockNum.addEventListener("keypress", e => e.key === "Enter" && lookupBlock());
+    els.addr.addEventListener("keypress", e => e.key === "Enter" && lookupAddr());
+
+    // 支持 URL ?tx=0x... / ?block=123 / ?addr=0x... 自动加载
+    (async function init() {
+      const params = new URLSearchParams(location.search);
+      try { await ensureProvider(); } catch (e) { return; }
+      if (params.get("tx"))      { els.txHash.value = params.get("tx");      await lookupTx(); }
+      else if (params.get("block")) { els.blockNum.value = params.get("block"); await lookupBlock(); }
+      else if (params.get("addr"))  { els.addr.value = params.get("addr");     await lookupAddr(); }
+    })();
+  </script>
+</body>
+</html>
